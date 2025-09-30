@@ -44,8 +44,8 @@ a:hover {
 }
 
 a.router-link-exact-active {
-  background-color:#540019;
-  border-color: #7a0033;
+  background-color:#62011e;
+  border-color: #990040;
   text-decoration: none;
 }
 </style>

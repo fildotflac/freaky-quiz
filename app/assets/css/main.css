@@ -1,11 +1,11 @@
 /* Dark Theme with Deep Pink Accent (#ff006f) */
 :root {
   /* Pink color palette */
-  --pink-darkest: #190014;
-  --pink-darker: #310029;
-  --pink-dark: #4a0040;
-  --pink-medium: #73005f;
-  --pink-light: #b30095;
+  --pink-darkest: #19000d;
+  --pink-darker: #31001e;
+  --pink-dark: #4a0026;
+  --pink-medium: #730032;
+  --pink-light: #b30045;
   --pink-accent: #ff006f;
   
   /* Background colors */

@@ -1,5 +1,6 @@
 <script setup>
 import Header from '~/components/Header.vue';
+import Footer from '~/components/Footer.vue';
 import Button from '~/components/Button.vue';
 useHead({
   title: 'EmotAI Quiz',
@@ -22,12 +23,14 @@ useHead({
             <p>- Ogni domanda è progettata per farti valutare quesiti riguardanti una possibile intelligenza artificiale estremamente vicina alla mente umana.</p>
             <p>- Rispondendo a queste domande contribuirai a un piccolo studio sulla percezione umana delle emozioni "binarie" e delle sfide etiche associate all'IA.</p>
             <p>- Risponderai alle domande con si/no o votando su una scala da 1 a 5.</p>
+            <p>- Ogni persona puó rispondere una volta.</p>
             <br>
             <h2 style="text-align: center;">IL QUIZ É COMPLETAMENTE ANONIMO</h2>
             <br>
             <Button label="Inizia il Quiz" to="/quiz" class="cen"/>
         </div>
     </main>
+    <Footer />
 </template>
 
 <style>
