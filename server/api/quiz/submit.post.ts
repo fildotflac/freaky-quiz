@@ -1,3 +1,5 @@
+import { promises as fs } from 'fs';
+import path from 'path';
 export default defineEventHandler(async (event) => {
   // Only allow POST requests
   if (getMethod(event) !== 'POST') {
@@ -68,25 +70,38 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Create persistent file storage in project data directory
-    const storage = useStorage('data')
-    const storageKey = `quiz-responses-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}.json`
-    
-    // Get existing responses
-    let existingData: any[] = []
+    // Use Node.js fs to persist submissions
+    const dataDir = path.join(process.cwd(), '.data', 'kv');
+    const fileName = `quiz-responses-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}.json`;
+    const filePath = path.join(dataDir, fileName);
+
+    // Ensure directory exists
+    await fs.mkdir(dataDir, { recursive: true });
+
+    // Read existing data
+    let existingData: any[] = [];
     try {
-      const stored = await storage.getItem(storageKey)
-      existingData = stored ? JSON.parse(stored as string) : []
-    } catch {
-      // File doesn't exist yet, start with empty array
-      existingData = []
+      const fileContent = await fs.readFile(filePath, 'utf-8');
+      const parsed = JSON.parse(fileContent);
+      if (Array.isArray(parsed)) {
+        existingData = parsed;
+      }
+    } catch (err) {
+      // If file doesn't exist or is malformed, start with empty array
+      existingData = [];
+    }
+    // Sanitize 'domanda4_4' field to prevent offensive content
+    const offensiveWords = ["negro", "dio"];
+    if (offensiveWords.includes(submission.responses.domanda4_4?.toLowerCase())) {
+      submission.responses.domanda4_4 = "[redacted]";
     }
 
     // Add new submission
-    existingData.push(submission)
+    existingData.push(submission);
 
-    // Store updated data as JSON string
-    await storage.setItem(storageKey, JSON.stringify(existingData, null, 2))
+
+    // Write updated data to file
+    await fs.writeFile(filePath, JSON.stringify(existingData, null, 2), 'utf-8');
 
     // Return success response
     return {
