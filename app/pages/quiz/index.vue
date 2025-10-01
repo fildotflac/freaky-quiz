@@ -46,6 +46,10 @@ const isFormValid = computed(() => {
 
 // Submit function
 const submitQuiz = async () => {
+    if (isSubmitting.value) {
+        return
+    }
+
   if (!isFormValid.value) {
     submitError.value = 'Per favore rispondi a tutte le domande obbligatorie'
     return
@@ -54,8 +58,8 @@ const submitQuiz = async () => {
   isSubmitting.value = true
   submitError.value = ''
 
-  try {
-    const { data } = await $fetch('/api/quiz/submit', {
+    try {
+        const response = await $fetch('/api/quiz/submit', {
       method: 'POST',
       body: {
         ...formData.value,
@@ -65,6 +69,9 @@ const submitQuiz = async () => {
     })
     
     submitSuccess.value = true
+        if (response?.message) {
+            submitError.value = ''
+        }
     await navigateTo('/quiz/thank-you')
   } catch (error) {
     submitError.value = 'Errore durante l\'invio. Riprova più tardi.'

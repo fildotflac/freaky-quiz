@@ -37,16 +37,18 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Get client info for session tracking
-    const headers = getHeaders(event)
-    const clientIP = headers['x-forwarded-for'] || headers['x-real-ip'] || 'unknown'
-    const today = new Date().toISOString().split('T')[0]
+  // Get client info for session tracking
+  const headers = getHeaders(event)
+  const clientIP = headers['x-forwarded-for'] || headers['x-real-ip'] || 'unknown'
+  const today = new Date().toISOString().split('T')[0]
+  const clientTimestamp = typeof body.timestamp === 'string' ? body.timestamp : null
+  const sessionId = `${clientIP}-${today}`
 
     // Create submission object
     const submission = {
       id: generateSubmissionId(),
       timestamp: new Date().toISOString(),
-      sessionId: `${clientIP}-${today}`, // Simple session tracking
+      sessionId, // Simple session tracking
       responses: {
         domanda1_1: body.domanda1_1,
         domanda1_2: body.domanda1_2,
@@ -66,7 +68,8 @@ export default defineEventHandler(async (event) => {
       },
       metadata: {
         userAgent: body.userAgent || 'unknown',
-        submittedAt: new Date().toLocaleString('it-IT')
+        submittedAt: new Date().toLocaleString('it-IT'),
+        clientTimestamp
       }
     }
 
@@ -90,6 +93,41 @@ export default defineEventHandler(async (event) => {
       // If file doesn't exist or is malformed, start with empty array
       existingData = [];
     }
+    // Handle duplicate submissions (same client & timestamp)
+    const responsesHash = JSON.stringify(submission.responses)
+    const duplicateSubmission = existingData.find((entry) => {
+      if (entry.sessionId !== sessionId) {
+        return false
+      }
+
+      if (clientTimestamp && entry.metadata?.clientTimestamp === clientTimestamp) {
+        return true
+      }
+
+      const entryTimestamp = entry.timestamp ? new Date(entry.timestamp).getTime() : null
+      const currentTimestamp = new Date(submission.timestamp).getTime()
+      const withinWindow = entryTimestamp !== null && Math.abs(currentTimestamp - entryTimestamp) <= 1000
+
+      if (!withinWindow) {
+        return false
+      }
+
+      try {
+        return JSON.stringify(entry.responses) === responsesHash
+      } catch (error) {
+        console.warn('Failed to compare submission responses for deduplication:', error)
+        return false
+      }
+    })
+
+    if (duplicateSubmission) {
+      return {
+        success: true,
+        submissionId: duplicateSubmission.id,
+        message: 'Risposte già registrate.'
+      }
+    }
+
     // Sanitize 'domanda4_4' field to prevent offensive content
     const offensiveWords = ["negro", "dio"];
     if (offensiveWords.includes(submission.responses.domanda4_4?.toLowerCase())) {

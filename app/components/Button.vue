@@ -11,10 +11,21 @@ export default defineComponent({
     to: {
       type: String,
       default: null
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    type: {
+      type: String,
+      default: 'button'
     }
   },
   methods: {
     handleClick() {
+      if (this.disabled) {
+        return;
+      }
       if (this.to) {
         this.$router.push(this.to);
       }
@@ -25,7 +36,12 @@ export default defineComponent({
 </script>
 
 <template>
-  <button class="custom-button" @click="handleClick">
+  <button
+    class="custom-button"
+    :type="type"
+    :disabled="disabled"
+    @click="handleClick"
+  >
     {{ label }}
   </button>
 </template>
@@ -55,5 +71,12 @@ export default defineComponent({
   border-color: #7a0033;
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.custom-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 </style>
