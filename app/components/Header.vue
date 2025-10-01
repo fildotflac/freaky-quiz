@@ -3,7 +3,7 @@
     <nav>
       <NuxtLink to="/">Quiz</NuxtLink>
       <NuxtLink to="/aboutme">About Me</NuxtLink>
-      <NuxtLink to="/contact">Contact</NuxtLink>
+      <NuxtLink to="/contact">Contatti</NuxtLink>
     </nav>
   </header>
 </template>

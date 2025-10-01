@@ -19,7 +19,7 @@ useHead({
     <main>
         <div class="page-container">
             <h1>Contatti</h1>
-            <p>Puoi contattarmi personalmente a <a href="mailto:tsbfpp@gmail.com">tsbfpp@gmail.com</a> o tramite Instagram a <a href="https://www.instagram.com/filippotusberti/">@filippo_tusberti</a>.</p>
+            <p>Puoi contattarmi personalmente a <a href="mailto:tsbfpp@gmail.com">tsbfpp@gmail.com</a> o tramite Instagram a <a href="https://www.instagram.com/filippotusberti/">@filippotusberti</a>.</p>
         </div>
     </main>
     <Footer />
