@@ -12,6 +12,27 @@ export default defineEventHandler(async (event) => {
   try {
     // Read the request body
     const body = await readBody(event)
+
+    const turnstileToken = typeof body.turnstileToken === 'string' ? body.turnstileToken : ''
+    delete body.turnstileToken
+
+    if (!turnstileToken) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Verifica anti-bot mancante o non valida.'
+      })
+    }
+
+    const runtimeConfig = useRuntimeConfig()
+    const secretKey = runtimeConfig.turnstileSecretKey as string | undefined
+
+    if (!secretKey) {
+      console.error('Turnstile secret key is not configured. Set TURNSTILE_SECRET_KEY in the runtime environment.')
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Verifica anti-bot non configurata.'
+      })
+    }
     
     // Validate required fields
     const requiredFields = ['domanda1_1', 'domanda1_2', 'domanda1_3']
@@ -39,10 +60,44 @@ export default defineEventHandler(async (event) => {
 
   // Get client info for session tracking
   const headers = getHeaders(event)
-  const clientIP = headers['x-forwarded-for'] || headers['x-real-ip'] || 'unknown'
+  const clientIPHeader = headers['x-forwarded-for'] || headers['x-real-ip'] || ''
+  const clientIP = clientIPHeader ? clientIPHeader.split(',')[0].trim() : 'unknown'
   const today = new Date().toISOString().split('T')[0]
   const clientTimestamp = typeof body.timestamp === 'string' ? body.timestamp : null
   const sessionId = `${clientIP}-${today}`
+
+    const payload = new URLSearchParams()
+    payload.append('secret', secretKey)
+    payload.append('response', turnstileToken)
+    if (clientIP !== 'unknown') {
+      payload.append('remoteip', clientIP)
+    }
+
+    interface TurnstileVerifyResponse {
+      success: boolean
+      challenge_ts?: string
+      hostname?: string
+      'error-codes'?: string[]
+      action?: string
+      cdata?: string
+    }
+
+    const verification = await $fetch<TurnstileVerifyResponse>('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: payload.toString(),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    if (!verification.success) {
+      const errorCodes = verification['error-codes']?.join(', ') || 'unknown_error'
+      console.warn('Turnstile verification failed:', errorCodes)
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Verifica anti-bot non superata.'
+      })
+    }
 
     // Create submission object
     const submission = {

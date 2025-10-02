@@ -7,5 +7,11 @@ export default defineNuxtConfig({
   tailwindcss: {
     exposeConfig: true,
     viewer: true,
+  },
+  runtimeConfig: {
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY,
+    public: {
+      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY
+    }
   }
 })

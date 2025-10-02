@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import Header from '~/components/Header.vue';
 import Footer from '~/components/Footer.vue';
 import Button from '~/components/Button.vue';
@@ -12,6 +12,26 @@ useHead({
     }
   ]
 })
+
+declare global {
+    interface Window {
+        turnstile?: {
+            render: (
+                container: HTMLElement,
+                options: {
+                    sitekey: string
+                    callback: (token: string) => void
+                    'error-callback'?: () => void
+                    'timeout-callback'?: () => void
+                    theme?: 'light' | 'dark' | 'auto'
+                    size?: 'normal' | 'compact'
+                }
+            ) => string
+            reset: (widgetId?: string) => void
+            remove?: (widgetId?: string) => void
+        }
+    }
+}
 
 // Form data state
 const formData = ref({
@@ -36,6 +56,130 @@ const formData = ref({
 const isSubmitting = ref(false)
 const submitError = ref('')
 const submitSuccess = ref(false)
+const turnstileToken = ref('')
+const turnstileError = ref('')
+const turnstileContainer = ref<HTMLElement | null>(null)
+const turnstileWidgetId = ref<string | null>(null)
+const isTurnstileReady = ref(false)
+
+const runtimeConfig = useRuntimeConfig()
+const turnstileSiteKey = computed<string>(() => {
+    const siteKey = runtimeConfig.public?.turnstileSiteKey as string | undefined
+    return siteKey ?? ''
+})
+
+const canSubmit = computed(() => isFormValid.value && !!turnstileToken.value && !isSubmitting.value)
+const submitButtonLabel = computed(() => {
+    if (isSubmitting.value) {
+        return 'Invio in corso...'
+    }
+
+    if (!turnstileToken.value) {
+        return 'Completa la verifica per inviare'
+    }
+
+    return 'Invia Risposte'
+})
+
+const resetTurnstile = () => {
+    if (typeof window === 'undefined' || !window.turnstile || !turnstileWidgetId.value) {
+        return
+    }
+
+    window.turnstile.reset(turnstileWidgetId.value)
+    turnstileToken.value = ''
+    turnstileError.value = ''
+    isTurnstileReady.value = true
+}
+
+const renderTurnstile = () => {
+    if (typeof window === 'undefined') {
+        return
+    }
+
+    if (!turnstileSiteKey.value) {
+        console.warn('Turnstile site key not configured; submissions will be blocked.')
+        return
+    }
+
+    if (!window.turnstile || !turnstileContainer.value) {
+        return
+    }
+
+    if (turnstileWidgetId.value) {
+        window.turnstile.reset(turnstileWidgetId.value)
+        return
+    }
+
+    turnstileWidgetId.value = window.turnstile.render(turnstileContainer.value, {
+        sitekey: turnstileSiteKey.value,
+        callback: (token: string) => {
+            turnstileToken.value = token
+            turnstileError.value = ''
+            isTurnstileReady.value = true
+        },
+        'error-callback': () => {
+            turnstileError.value = 'Verifica fallita. Riprova.'
+            turnstileToken.value = ''
+            isTurnstileReady.value = false
+        },
+        'timeout-callback': () => {
+            turnstileToken.value = ''
+            isTurnstileReady.value = false
+        },
+        theme: 'dark'
+    })
+
+    isTurnstileReady.value = true
+}
+
+onMounted(() => {
+    if (typeof window === 'undefined') {
+        return
+    }
+
+    if (!turnstileSiteKey.value) {
+        submitError.value = 'Configurazione Turnstile mancante. Contatta l\'amministratore.'
+        return
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-turnstile-script]')
+
+    const handleScriptLoad = () => {
+        renderTurnstile()
+    }
+
+    if (existingScript) {
+        if (window.turnstile) {
+            renderTurnstile()
+        } else {
+            existingScript.addEventListener('load', handleScriptLoad, { once: true })
+        }
+        return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+    script.async = true
+    script.defer = true
+    script.setAttribute('data-turnstile-script', 'true')
+    script.onload = handleScriptLoad
+    script.onerror = () => {
+        turnstileError.value = 'Impossibile caricare la verifica anti-bot.'
+    }
+
+    document.head.appendChild(script)
+})
+
+onBeforeUnmount(() => {
+    if (typeof window === 'undefined' || !window.turnstile) {
+        return
+    }
+
+    if (turnstileWidgetId.value) {
+        window.turnstile.remove?.(turnstileWidgetId.value)
+    }
+})
 
 // Validation
 const isFormValid = computed(() => {
@@ -50,8 +194,13 @@ const submitQuiz = async () => {
         return
     }
 
-  if (!isFormValid.value) {
-    submitError.value = 'Per favore rispondi a tutte le domande obbligatorie'
+    if (!isFormValid.value) {
+        submitError.value = 'Per favore rispondi a tutte le domande obbligatorie'
+        return
+    }
+
+    if (!turnstileToken.value) {
+        submitError.value = 'Completa la verifica anti-bot prima di inviare.'
     return
   }
 
@@ -62,9 +211,10 @@ const submitQuiz = async () => {
         const response = await $fetch('/api/quiz/submit', {
       method: 'POST',
       body: {
-        ...formData.value,
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent
+                ...formData.value,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                turnstileToken: turnstileToken.value
       }
     })
     
@@ -72,10 +222,13 @@ const submitQuiz = async () => {
         if (response?.message) {
             submitError.value = ''
         }
+            turnstileToken.value = ''
+                    resetTurnstile()
     await navigateTo('/quiz/thank-you')
   } catch (error) {
     submitError.value = 'Errore durante l\'invio. Riprova più tardi.'
     console.error('Submission failed:', error)
+                    resetTurnstile()
   } finally {
     isSubmitting.value = false
   }
@@ -226,10 +379,24 @@ const submitQuiz = async () => {
                     {{ submitError }}
                 </div>
                 
+                <ClientOnly>
+                    <div class="turnstile-wrapper">
+                        <div ref="turnstileContainer" class="cf-turnstile"></div>
+                    </div>
+                </ClientOnly>
+
+                <div v-if="turnstileError" class="error-message">
+                    {{ turnstileError }}
+                </div>
+
+                <p v-else-if="isTurnstileReady && !turnstileToken" class="turnstile-hint">
+                    Completa la verifica anti-bot per abilitare l'invio.
+                </p>
+
                 <Button 
-                    :label="isSubmitting ? 'Invio in corso...' : 'Invia Risposte'"
+                    :label="submitButtonLabel"
                     @click="submitQuiz"
-                    :disabled="!isFormValid || isSubmitting"
+                    :disabled="!canSubmit"
                     class="submit-button"
                 />
                 
@@ -340,6 +507,18 @@ const submitQuiz = async () => {
     font-size: 0.9rem;
     color: var(--text-secondary, #ffb8d6);
     margin-top: 1rem;
+}
+
+.turnstile-wrapper {
+    display: flex;
+    justify-content: center;
+    margin: 1rem 0;
+}
+
+.turnstile-hint {
+    font-size: 0.9rem;
+    color: var(--text-secondary, #ffb8d6);
+    margin-bottom: 1rem;
 }
 
 .cen {
